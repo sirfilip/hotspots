@@ -1,0 +1,28 @@
+name: Test Hotspots
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    env:
+      NECSAM_ENVIRONMENT: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.14' ]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          stable: 'false'
+          go-version: ${{ matrix.go }}
+      - name: Infra up
+        run: docker-compose up -d infra
+      - name: go test
+        run: go test -cover ./...
+      - name: cleanup
+        run: docker-compose down
+

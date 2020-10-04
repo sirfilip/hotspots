@@ -1,0 +1,3 @@
+.PHONY: test
+test:
+	NECSAM_ENV=test go test -cover -count=1 ./...

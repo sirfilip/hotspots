@@ -1,0 +1,56 @@
+version: '3'
+
+services:
+  api:
+    build:
+      dockerfile: docker/api/Dockerfile
+      context: .
+    ports:
+      - 3000:3000
+    environment:
+      - NECSAM_EMAIL_HOST=mailcatcher
+      - NECSAM_EMAIL_USE_TLS=false
+      - NECSAM_EMAIL_TLS_SKIP_VERIFY=true
+      - NECSAM_MONGOURL=mongodb://mongo:27017
+    depends_on:
+      - mailcatcher
+      - mongo
+      - swagger
+      - mongo-express
+
+  swagger:
+    build: docker/swagger
+    ports:
+      - 8080:8080
+    volumes:
+      - ./docs:/data/docs
+    environment:
+      - SWAGGER_JSON=/data/docs/api.yaml
+  mailcatcher:
+    build: docker/mailcatcher
+    ports:
+      - 1025:1025
+      - 1080:1080
+
+  mongo:
+    image: mongo:4.2.7
+    restart: always
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
+
+  infra:
+    build: docker/mounter
+    depends_on:
+      - mailcatcher
+      - mongo
+
+volumes:
+  mongo_data:

@@ -1,0 +1,635 @@
+openapi: '3.0.0'
+info:
+  title: 'Recommendations HOTS API'
+  description: 'Work with user management, published events, recommendations'
+  termsOfService: 'TODO'
+  version: '1.0'
+  contact:
+    url: 'TODO'
+    name: 'Recommendations HOTS API'
+    email: 'api@example.com'
+  license:
+    name: 'MIT'
+servers:
+  - url: http://localhost:3000/v1
+    description: Development Server
+paths:
+  /health/live:
+    get:
+      description: >
+        This probe is used to identify situations where the service is running but may not behave optimally,
+        i.e. sluggish response or corrupt back-end. Such problems can be only fixed by a restart.
+      security: []
+      operationId: servicePing
+      tags:
+        - health
+      responses:
+        200:
+          description: OK
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /health/ready:
+    get:
+      description: >
+        This probe is used to identify situations where the service is not ready to accept requests yet.
+      security: []
+      operationId: serviceReady
+      tags:
+        - health
+      responses:
+        200:
+          description: OK
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /auth/register:
+    post:
+      security: []
+      operationId: userRegister
+      tags:
+        - auth
+      summary: 'A new user registers'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: username
+                email:
+                  type: string
+                  format: email
+                  example: 'username@example.com'
+                password:
+                  type: string
+                  format: password
+                  exapmple: 'password'
+              required:
+                - username
+                - email
+                - password
+        description: >
+          Creates a new user registration flow that cause a new User to be created. Will trigger
+          an email being sent out, so that the user can confirm it's registration.
+        required: true
+      responses:
+        201:
+          description: 'A new user has been created'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /auth/login:
+    post:
+      security: []
+      tags:
+        - auth
+      summary: Logs in a user into the system
+      description: >
+        Logs in a user into the system by providing the username and password
+        for the system.
+      operationId: loginUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: 'username@example.com'
+                password:
+                  type: string
+                  format: password
+                  example: 'password'
+      responses:
+        200:
+          description: successful operation
+          headers:
+            X-Rate-Limit:
+              description: calls per hour allowed by the user
+              schema:
+                type: integer
+                format: int32
+            X-Expires-After:
+              description: date in UTC when token expires
+              schema:
+                type: string
+                format: date-time
+          content:
+            application/json:
+              schema:
+                token:
+                  type: string
+                  example: 13a33725-201d-4eb4-8513-c3f77ebab0d5
+        400:
+          description: Invalid username/password supplied or username does not exist
+          $ref: '#/components/responses/InvalidRequest'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /auth/logout:
+    get:
+      security:
+        - BearerAuth: [user, admin]
+      tags:
+        - auth
+      summary: Logs out current logged in user session
+      description: >
+        Logs out the currently logged in user from the system.
+      operationId: logoutUser
+      responses:
+        200:
+          description: User successfully logged out
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /auth/activate/{code}:
+    get:
+      security: []
+      operationId: activateUser
+      tags:
+        - auth
+      summary: Activates a newly created user
+      description: >
+        After creation of a new user, the user has to be activated by supplying the
+        activation code sent out by the system. After activation the user can be
+        logged in to the system.
+      parameters:
+        - in: path
+          name: code
+          schema:
+            type: string
+          required: true
+      responses:
+        204:
+          $ref: '#/components/responses/NoContent'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+  /users/{id}:
+    get:
+      security:
+        - BearerAuth: [user, admin]
+      tags:
+        - users
+      summary: Gets a user by it's ID.
+      description: >
+        This resource represents an individual user in the system.
+        Each user is identified by `id`.
+      operationId: getUserByName
+      parameters:
+        - name: id
+          in: path
+          description: User ID
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      security:
+        - BearerAuth: [user, admin]
+      tags:
+        - users
+      summary: Updates a user by it's ID
+      description: >
+        Updates a user with specified values by it's ID
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          description: name that need to be updated
+          required: true
+          schema:
+            type: string
+      responses:
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+        description: Updated user object
+        required: true
+  /events:
+    get:
+      security: []
+      summary: Gets a list of events.
+      description: >
+        Fetches a list of events from the system.
+      operationId: getEvents
+      tags:
+        - events
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: 'Page number'
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: 'Query param used in search'
+        - in: query
+          name: filters
+          schema:
+            type: object
+            properties:
+              max-cost:
+                type: number
+                format: float
+              location:
+                $ref: '#/components/schemas/Geometry'
+          description: 'Additional filters'
+      responses:
+        200:
+          description: 'A list of events'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Events'
+        204:
+          $ref: '#/components/responses/NoContent'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - events
+      security:
+        - BearerAuth: [user]
+      operationId: createEvent
+      summary: Creates a new event
+      description: >
+        This resource represents a new event being created by a user.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: "Gril in the woods"
+                description:
+                  type: string
+                  example: "Need to see this...."
+                cost:
+                  type: number
+                  format: float
+                  example: 12.4
+                date:
+                  type: string
+                  format: date
+                latitude:
+                  type: number
+                  format: float
+                longitude:
+                  type: number
+                  format: float
+        description: Updates an event
+      responses:
+        200:
+          description: Updates event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+  /events/{id}:
+    get:
+      security: []
+      tags:
+        - events
+      summary: Retrieves an existing event by ID.
+      description: >
+        Retrieves and existing event by ID.
+      operationId: getEventById
+      parameters:
+        - name: id
+          in: path
+          description: The event ID that needs to be retrieved
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: The event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags:
+        - events
+      security:
+        - BearerAuth: [user]
+      summary: Updates the event identified by the event id.
+      operationId: updateEvent
+      parameters:
+        - name: id
+          in: path
+          description: The event ID that needs to be updated
+          required: true
+          schema:
+            type: string
+      description: >
+        Updates the event from the supplied data in the payload.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+        description: Updates an event
+      responses:
+        200:
+          description: The event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        400:
+          $ref: '#/components/responses/InvalidRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        title:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        cost:
+          type: number
+          format: float
+        location:
+          $ref: '#/components/schemas/Point'
+    Events:
+      type: array
+      items:
+        $ref: '#/components/schemas/Event'
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        username:
+          type: string
+        firstName:
+          type: string
+        middleName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        location:
+          $ref: '#/components/schemas/Point'
+        userStatus:
+          type: string
+          description: User Status
+          enum: [active, disabled, pending-activation]
+          readOnly: true
+    Geometry:
+      type: object
+      description: GeoJSon geometry
+      discriminator:
+        propertyName: type
+      required:
+        - type
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#geometry-objects
+      properties:
+        type:
+          type: string
+          enum:
+            - Point
+            - LineString
+            - Polygon
+            - MultiPoint
+            - MultiLineString
+            - MultiPolygon
+          description: the geometry type
+    Point2D:
+      type: array
+      maxItems: 2
+      minItems: 2
+      items:
+        type: number
+    Point:
+      type: object
+      description: GeoJSon geometry
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#id2
+      allOf:
+        - $ref: '#/components/schemas/Geometry'
+        - properties:
+            coordinates:
+              $ref: '#/components/schemas/Point2D'
+    LineString:
+      type: object
+      description: GeoJSon geometry
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#id3
+      allOf:
+        - $ref: '#/components/schemas/Geometry'
+        - properties:
+            coordinates:
+              type: array
+              items:
+                $ref: '#/components/schemas/Point2D'
+    Polygon:
+      type: object
+      description: GeoJSon geometry
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#id4
+      allOf:
+        - $ref: '#/components/schemas/Geometry'
+        - properties:
+            coordinates:
+              type: array
+              items:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Point2D'
+    MultiPoint:
+      type: object
+      description: GeoJSon geometry
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#id5
+      allOf:
+        - $ref: '#/components/schemas/Geometry'
+        - properties:
+            coordinates:
+              type: array
+              items:
+                $ref: '#/components/schemas/Point2D'
+    MultiLineString:
+      type: object
+      description: GeoJSon geometry
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#id6
+      allOf:
+        - $ref: '#/components/schemas/Geometry'
+        - properties:
+            coordinates:
+              type: array
+              items:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Point2D'
+    MultiPolygon:
+      type: object
+      description: GeoJSon geometry
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#id6
+      allOf:
+        - $ref: '#/components/schemas/Geometry'
+        - properties:
+            coordinates:
+              type: array
+              items:
+                type: array
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Point2D'
+    GeometryCollection:
+      type: object
+      description: GeoJSon geometry collection
+      required:
+        - type
+        - geometries
+      externalDocs:
+        url: http://geojson.org/geojson-spec.html#geometrycollection
+      properties:
+        type:
+          type: string
+          enum:
+            - GeometryCollection
+        geometries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Geometry'
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
+    InvalidRequestError:
+      type: object
+      properties:
+        errors:
+          type: object
+
+  responses:
+    InvalidRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/InvalidRequestError'
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: An unkown error has occured, please retry later.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: The service is currently unavailable, please retry later.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NoContent:
+      description: No content
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth:
+      - admin
+      - user
